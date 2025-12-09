@@ -1,1 +1,1 @@
-from .teensor import Teensor
+from .core import tensor

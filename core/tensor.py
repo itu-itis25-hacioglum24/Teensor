@@ -1,7 +1,7 @@
 import numpy as np
 
 
-class Teensor():
+class tensor():
     
     def __init__(self,data,children=(),_op=''):
         
@@ -16,14 +16,17 @@ class Teensor():
         self.grad = np.zeros_like(self.data,dtype=np.float32)
         
     def __repr__(self):
-        return f'Teensor(Data:{self.data},dtype:Teensor)'
+        return f'tensor(Data:{self.data},dtype:tensor)'
+    
+    def __hash__(self):
+        return id(self)
 
     def _unbroadcast(self, grad, original_shape):
-        # 1. sum the extra dimensions (Örn: (32, 10) -> (10,))
+        # 1. sum the extra dimensions 
         while grad.ndim > len(original_shape):
             grad = grad.sum(axis=0)
         
-        # 2. sum the dimensions that were originally 1 (Örn: (1, 10) -> (10,))
+        # 2. sum the dimensions that were originally 1 
         for i, dim in enumerate(original_shape):
             if dim == 1 and grad.shape[i] > 1:
                 grad = grad.sum(axis=i, keepdims=True)
@@ -33,10 +36,10 @@ class Teensor():
 
     def __add__(self,other):
         
-        other = other if isinstance(other,Teensor) else Teensor(other)
+        other = other if isinstance(other,tensor) else tensor(other)
         
         
-        out = Teensor(self.data + other.data, (self,other));out.op='+'
+        out = tensor(self.data + other.data, (self,other));out.op='+'
             
         ### (d(A+B)/dA = I[identity matrix])I  * out.grad (chain rule)
         def _backward():
@@ -52,10 +55,10 @@ class Teensor():
         
     def __mul__(self,other): # This operation is the Hadamard product, not matrix multiplication
         
-        other = other if isinstance(other,Teensor) else Teensor(other)
+        other = other if isinstance(other,tensor) else tensor(other)
 
         
-        out = Teensor(self.data * other.data, (self,other));out.op = '*'
+        out = tensor(self.data * other.data, (self,other));out.op = '*'
             
         ### (d(A*B)/dA = B) B * out.grad(chain rule) 
         def _backward():
@@ -70,7 +73,7 @@ class Teensor():
         
         assert isinstance(other,(int,float)), "Only int and float are allowed for exponent"
         
-        out = Teensor(self.data**other, (self, ));out.op = 'pow'
+        out = tensor(self.data**other, (self, ));out.op = 'pow'
             
         def _backward():
             self.grad += self._unbroadcast((other * self.data**(other-1)) * out.grad, self.data.shape)                
@@ -86,12 +89,51 @@ class Teensor():
     def __truediv__(self, other): return self * other**-1
     def __rtruediv__(self, other): return other * self**-1
     
+    def __abs__(self):
+        
+        out = tensor(np.abs(self.data), (self,), 'abs')
+        
+        def _backward():
+            self.grad += self._unbroadcast(np.sign(self.data) * out.grad, self.data.shape)
+        out._backward = _backward
+        return out    
+    
+    # ---- COMPARISON OPERATORS ----
+    
+    def __eq__(self, other): # ==
+        target = other.data if isinstance(other, tensor) else other
+        return tensor(self.data == target)
+    
+    def __lt__(self, other): # <
+        target = other.data if isinstance(other, tensor) else other
+        return tensor(self.data < target)
+    
+    def __gt__(self, other): # >    
+        target = other.data if isinstance(other, tensor) else other
+        return tensor(self.data > target)
+    
+    def __le__(self, other): # <=
+        
+        if isinstance(other, tensor):
+            target = other.data
+        else:
+            target = other
+        
+        return tensor(self.data <= target)
+    
+    def __ge__(self, other): # >=
+        target = other.data if isinstance(other, tensor) else other
+        return tensor(self.data >= target)
+    
+    def __ne__(self, other): # !=
+        target = other.data if isinstance(other, tensor) else other
+        return tensor(self.data != target)
         
     # ---- LINEAR  ALGEBRA OPERATIONS ----
     
     @property
     def transpose(self):
-        out = Teensor(self.data.transpose(), (self,), 'T')        # gradient of A^t = out.grad^t
+        out = tensor(self.data.transpose(), (self,), 'T')# gradient of A^t = out.grad^t
         def _backward():
             self.grad += out.grad.transpose()
         
@@ -103,8 +145,8 @@ class Teensor():
     # Matrix Multiplication A@B
     def matmul(self,other):
         
-        other = other if isinstance(other, Teensor) else Teensor(other)
-        out = Teensor(self.data @ other.data, (self, other), '@')
+        other = other if isinstance(other, tensor) else tensor(other)
+        out = tensor(self.data @ other.data, (self, other), '@')
         
         def _backward():
             self.grad += self._unbroadcast(out.grad @ other.data.swapaxes(-1, -2), self.data.shape)
@@ -118,7 +160,7 @@ class Teensor():
 
     @property
     def inverse(self):
-        out = Teensor(np.linalg.inv(self.data),(self, ),'inverse')
+        out = tensor(np.linalg.inv(self.data),(self, ),'inverse')
         
         def _backward():
             # upstream gradient
@@ -131,7 +173,7 @@ class Teensor():
     def sum(self, axis=None, keepdims=False):
         
         data = np.sum(self.data, axis=axis, keepdims=keepdims)
-        out = Teensor(data, (self,), 'sum')
+        out = tensor(data, (self,), 'sum')
 
         def _backward():
             grad = out.grad
@@ -180,9 +222,9 @@ class Teensor():
             node._backward()
 
     def mean(self):
-        # mean of the Teensor elements -skaler result
+        # mean of the tensor elements -skaler result
         div = self.data.size # number of elements
-        out = Teensor(np.mean(self.data), (self,), 'mean')
+        out = tensor(np.mean(self.data), (self,), 'mean')
         
         def _backward():
             # d(mean)/dx = 1/N

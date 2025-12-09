@@ -1,5 +1,5 @@
 import numpy as np
-from Tensor import Teensor
+from beegrad import tensor
     
 
 class Module:
@@ -20,9 +20,9 @@ class Module:
 
 class Linear(Module):
     def __init__(self, in_features, out_features):
-        scale = np.sqrt(2.0, in_features)
-        self.weight = Teensor(np.random.randn(in_features, out_features)* scale)
-        self.bias = Teensor(np.random.randn(1, out_features))
+        scale = np.sqrt(2.0 / in_features)
+        self.weight = tensor(np.random.randn(in_features, out_features)* scale)
+        self.bias = tensor(np.random.randn(1, out_features))
 
     def forward(self, x):
         return x.matmul(self.weight) + self.bias
@@ -36,7 +36,7 @@ class ReLU(Module):
         pass
 
     def forward(self, x):
-        out = Teensor(np.maximum(0, x.data), (x,), 'ReLU')
+        out = tensor(np.maximum(0, x.data), (x,), 'ReLU')
 
         def _backward():
             x.grad += (x.data > 0) * out.grad

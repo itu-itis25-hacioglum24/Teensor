@@ -1,1 +1,1 @@
-from .core import tensor
+from .tensor import tensor

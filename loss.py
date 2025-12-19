@@ -46,3 +46,5 @@ class Huber(Loss):
         loss_tensor = (is_small_error * quadratic_part) + ((1 - is_small_error) * linear_part)
         
         return loss_tensor.mean()
+    
+    
